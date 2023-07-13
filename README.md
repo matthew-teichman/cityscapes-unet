@@ -68,6 +68,12 @@ For example blue, which represents road is identified better with distance.
 
 Install the requirements.txt and run ```run.py``` to start training.
 
+Training with arguments
+
+```
+python run.py -dataset "../Cityscape/dataset/" -model "saved_model_epoch49.pth" -hidden_layer 32 -image_resize "256, 512" -loss_function dice -optimizer adam -learning_rate 1e-4 -epochs 10 -batch_size 8 -model_save_folder "model"
+```
+
 ### Generate Video
 
 Using the ``` video.py``` you can generate ```.mp4``` and ```.avi``` file.

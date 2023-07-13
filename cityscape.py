@@ -97,14 +97,20 @@ class CityscapeLabelsDecoder:
 
 
 class CitySegmentation(Dataset):
-    def __init__(self, image_root='dataset\\leftImg8bit\\', dimensions=(256, 512),
-                 mask_root='dataset\\gtFine\\', mode="catId", dataset="train", image_transforms=None,
+    def __init__(self, image_root='dataset', dimensions=(256, 512),
+                 mask_root='dataset', mode="catId", dataset="train", image_transforms=None,
                  mask_transforms=None):
         # add check if path exists
         self.mode = mode
         self.dim = dimensions
-        self.img_root = os.path.join(os.getcwd(), image_root)
-        self.mask_root = os.path.join(os.getcwd(), mask_root)
+
+        self.img_root = os.path.join(image_root, "leftImg8bit")
+        self.mask_root = os.path.join(image_root, "gtFine")
+
+        if (self.img_root.__contains__("..")):
+            self.img_root = os.path.join(os.getcwd().replace("cityscapes-unet", ""), self.img_root.replace("../", ""))
+            self.mask_root = os.path.join(os.getcwd().replace("cityscapes-unet", ""), self.mask_root.replace("../", ""))
+
         self.imgs, self.masks, self.poly_files = self._get_pairs(dataset)
         assert (len(self.imgs) == len(self.masks))
         assert (len(self.masks) == len(self.poly_files))
