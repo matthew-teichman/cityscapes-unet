@@ -57,8 +57,6 @@ if __name__ == '__main__':
                             num1.append(x)
                         else:
                             num2.append(x)
-                print(''.join(num1))
-                print(''.join(num2))
                 arg_image_resize = (int(''.join(num1)), int(''.join(num2)))
 
             case "-loss_function":

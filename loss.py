@@ -32,3 +32,4 @@ class BCEDiceLoss(nn.Module):
         dice_loss = 1.0 - dice.mean()
         loss_total = bce_loss + dice_loss
         return loss_total
+    

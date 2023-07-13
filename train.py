@@ -37,8 +37,8 @@ def train(path, model, train_loader, valid_loader, loss_function, optimizer, dev
             # update optimizer
             optimizer.step()
             # collect loss values
-            losses += loss.data.item()
-            dice, iou, precision, recall, _ = evaluation_score(outputs, masks)
+            losses += loss.detach().data.item()
+            dice, iou, precision, recall, _ = evaluation_score(outputs.detach(), masks.detach())
             total_dice += dice
             total_iou += iou
             total_precision += precision
