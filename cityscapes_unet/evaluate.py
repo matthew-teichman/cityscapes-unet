@@ -9,35 +9,34 @@ from sklearn.metrics import confusion_matrix
 
 # evaluation metrics
 def evaluation_score(predictions, targets, eps=1e-7, threshold=0.6):
-    predictions = predictions.cpu()
-    targets = targets.cpu()
-    # calculating dice score
-    dice_intersection = (predictions * targets).sum(dim=(2, 3))
-    dice = (2. * dice_intersection + eps) / (predictions.pow(2).sum(dim=(2, 3)) + targets.pow(2).sum(dim=(2, 3)) + eps)
-    dice = dice.mean()
-    # calculating iou score
-    inp = copy.copy(predictions.view(-1))
-    target = copy.copy(targets.view(-1))
-    iou_intersection = (inp * target).sum()
-    iou_total = (inp + target).sum()
-    iou_union = iou_total - iou_intersection
-    iou = iou_intersection / (iou_union + eps)
+    with torch.no_grad():
+        pred = predictions.clone()
+        gt = targets.clone()
+        # calculating dice score
+        dice_intersection = (predictions * targets).sum(dim=(2, 3))
+        dice = (2. * dice_intersection + eps) / (predictions.pow(2).sum(dim=(2, 3)) + targets.pow(2).sum(dim=(2, 3)) + eps)
+        dice = dice.mean()
+        # calculating iou score
+        inp = predictions.view(-1).clone()
+        target = targets.view(-1).clone()
+        iou_intersection = (inp * target).sum()
+        iou_total = (inp + target).sum()
+        iou_union = iou_total - iou_intersection
+        iou = iou_intersection / (iou_union + eps)
 
-    # calculate the true positives, false positives, and false negatives
-    target = target.int()
-    predictions = predictions.int()
-    mask_pred = predictions.flatten()
-    mask_true = target.flatten()
-    mask_pred = mask_pred.numpy()
-    mask_true = mask_true.numpy()
+        # calculate the true positives, false positives, and false negatives
+        predictions =  (pred > threshold)
+        targets = gt
 
-    # Calculate the confusion matrix
-    tn, fp, fn, tp = confusion_matrix(mask_true, mask_pred, labels=[0, 1]).ravel()
+        # Calculate True Positive (TP), False Positive (FP), and False Negative (FN)
+        TP = torch.logical_and(targets.bool(), predictions.bool()).sum()
+        FP = torch.logical_and(~targets.bool(), predictions.bool()).sum()
+        FN = torch.logical_and(targets.bool(), ~predictions.bool()).sum()
 
-    # Calculate precision and recall
-    precision = tp / (tp + fp + 1)
-    recall = tp / (tp + fn + 1)
-    return dice, iou, precision, recall, predictions
+        # Calculate Precision and Recall masks
+        precision = TP / (TP + FP + 1e-7)
+        recall = TP / (TP + FN + 1e-7)
+    return dice, iou, precision.item(), recall.item()
 
 
 # the function plots training loss or error

@@ -7,8 +7,8 @@ import torch
 from torchvision import transforms
 from torch.utils.data import DataLoader
 
-from model import UNet
-from cityscape import CityscapeDemo, CityscapeLabelsDecoder
+from cityscapes_unet.model import UNet
+from cityscapes_unet.cityscape import CityscapeDemo, CityscapeLabelsDecoder
 
 
 def image_mask_overlay(img, mask, label_colors, decoder):
@@ -115,7 +115,7 @@ def generate_video():
         transforms.ToTensor()]))
 
     batch_size = 8
-    train_dataloader = DataLoader(testdata, batch_size=batch_size, num_workers=1, shuffle=False)
+    test_dataloader = DataLoader(testdata, batch_size=batch_size, num_workers=1, shuffle=False)
 
     # define model
     n_channels = 3
@@ -152,7 +152,7 @@ def generate_video():
 
     print("Processing Demo Frames...")
     video_overlay = []
-    for i, img in tqdm(enumerate(train_dataloader), unit="batch", total=len(train_dataloader)):
+    for i, img in tqdm(enumerate(test_dataloader), unit="batch", total=len(test_dataloader)):
         # send tensor to cpu or gpu
         img = img.to(device)
         with torch.no_grad():

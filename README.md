@@ -52,13 +52,13 @@ For example blue, which represents road is identified better with distance.
     ├── images                  # Test results
     ├── model                   # Collection of saved models
     ├── video                   # Exported videos
-    ├── cityscape.py
-    ├── evaluate.py
-    ├── inference.py
-    ├── loss.py
-    ├── model.py
+    ├── cityscapes-unet
+        ├── evaluate.py
+        ├── inference.py
+        ├── loss.py
+        ├── model.py
+        ├── training.py
     ├── results.py
-    ├── run.py
     ├── train.py
     ├── video.py
     └── README.md
