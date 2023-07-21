@@ -2,14 +2,13 @@ import os, json
 import numpy as np
 import pandas as pd
 from PIL import Image
-from tqdm import tqdm
 
 import torch
 from torch.utils.data import Dataset
 
 
 class CityscapeLabelsDecoder:
-    def __init__(self):
+    def __init__(self, class_labels):
         # https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/helpers/labels.py
         self.labels = [
             ("name", "id", "trainId", "category", "catId", "hasInstances", "ignoreInEval", "color"),
@@ -45,13 +44,22 @@ class CityscapeLabelsDecoder:
             ('license plate', -1, -1, 'vehicle', 6, False, True, (0, 0, 142)),
         ]
         self.labels_df = pd.DataFrame(self.labels[1:], columns=self.labels[0])
+        self.class_labels = class_labels
 
     # Take single mask image RxGxB and exports NxHxW where N is number classes
-    def hot_decode_masks(self, mask, mode="catId"):
-        color_labels = self.labels_df["color"].to_numpy()
-        class_labels = self.labels_df[mode].to_numpy()
+    def hot_decode_masks(self, mask, labels):
 
-        # makes mask of 35 class using the color pixel values
+        color_labels = np.array([])
+        class_labels = np.array([])
+
+        for i, label in enumerate(labels):
+            rows = self.labels_df.loc[self.labels_df['category'] == label].to_numpy()
+            color = rows[:, -1]
+            class_index = np.array([i] * len(color)).astype(int)
+            color_labels = np.append(color_labels, color)
+            class_labels = np.append(class_labels, class_index)
+
+        # build mask based on color matching color and rgb ground truth
         masks = []
         for i, color in enumerate(color_labels):
             equality = np.equal(mask, color)
@@ -71,11 +79,9 @@ class CityscapeLabelsDecoder:
             while (head <= unqiue_classes[i] - 1):
                 mask = (mask == 1) | (masks[:, :, head] == 1)
                 head += 1
-
             custom_mask.append(mask)
         custom_mask = np.stack(custom_mask, axis=-1)
         custom_mask = custom_mask.astype(int)
-
         custom_mask = np.transpose(custom_mask, (2, 0, 1))
 
         return custom_mask
@@ -98,10 +104,10 @@ class CityscapeLabelsDecoder:
 
 class CitySegmentation(Dataset):
     def __init__(self, image_root='dataset', dimensions=(256, 512),
-                 mask_root='dataset', mode="catId", dataset="train", image_transforms=None,
+                 mask_root='dataset', labels= ["catId"], dataset="train", image_transforms=None,
                  mask_transforms=None):
         # add check if path exists
-        self.mode = mode
+        self.labels = labels
         self.dim = dimensions
 
         self.img_root = os.path.join(image_root, "leftImg8bit")
@@ -118,7 +124,7 @@ class CitySegmentation(Dataset):
         self.mask_transforms = mask_transforms
         self.poly = []
         self._json_polygon_objects()
-        self._label_encoder_decoder = CityscapeLabelsDecoder()
+        self._label_encoder_decoder = CityscapeLabelsDecoder(labels)
 
     def __len__(self):
         return len(self.imgs)
@@ -142,8 +148,7 @@ class CitySegmentation(Dataset):
         if self.mask_transforms is not None:
             masks = self.mask_transforms(masks)
         masks = np.array(masks)
-        masks = self._label_encoder_decoder.hot_decode_masks(masks, mode=self.mode)
-
+        masks = self._label_encoder_decoder.hot_decode_masks(masks, self.labels)
         return img, masks
 
     def _get_pairs(self, dataset):
@@ -168,17 +173,6 @@ class CitySegmentation(Dataset):
                         print("Cannot find the mask or image or json file: ", imgpath, maskpath, jsonpath)
         print("Found {} images in the folder {}".format(len(img_path), os.path.join(self.img_root, dataset)))
         return img_path, mask_path, json_path
-
-    def __build_masks(self):
-        print("Building Masks")
-        collection_masks = []
-        for mask in tqdm(self.masks):
-            mask = Image.open(mask).convert('RGB')
-            mask = self._resize_fcn(mask)
-            mask = np.array(mask)
-            mask = self._label_encoder_decoder.hot_decode_masks(mask, mode=self.mode)
-            collection_masks.append(mask)
-        return collection_masks
 
     def _json_polygon_objects(self):
         for file in self.poly_files:

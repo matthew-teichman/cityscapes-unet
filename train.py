@@ -1,14 +1,5 @@
-import os
 import sys
-import torch.optim
-import torch.nn as nn
-from torchvision import transforms
-from torch.utils.data import DataLoader
-
-from cityscapes_unet.cityscape import CitySegmentation
-from cityscapes_unet.loss import DiceLoss, BCEDiceLoss
-from cityscapes_unet.training import train
-from cityscapes_unet.model import UNet
+from cityscapes_unet.cityscapes_unet import Cityscapes_UNet
 
 # python run.py -dataset "../Cityscape/dataset/"
 #               -model "saved_model_epoch49.pth"
@@ -20,6 +11,7 @@ from cityscapes_unet.model import UNet
 #               -epochs 30
 #               -batch_size 15
 #               -model_save_folder "model"
+#               -labels "vehicle" "human"
 
 
 if __name__ == '__main__':
@@ -35,124 +27,64 @@ if __name__ == '__main__':
     arg_epochs: int = 30
     arg_batch_size: str = "auto"
     arg_model_saved_folder: str = ""
+    arg_labels = []
 
-    for i, arg in enumerate(sys.argv):
-        match arg:
-            case "-dataset":
-                arg_path_cityscape_dataset = str(sys.argv[i+1])
-            case "-model":
-                arg_path_pretrained_model = str(sys.argv[i+1])
-            case "-hidden_layer":
-                arg_hidden_layer_size = int(sys.argv[i+1])
-            case "-image_resize":
-                arg_image_resize = tuple(sys.argv[i+1])
-                i = 0
-                num1 = []
-                num2 = []
-                for x in arg_image_resize:
-                    if x == ",":
-                        i += 1
-                    else:
-                        if i < 1:
-                            num1.append(x)
-                        else:
-                            num2.append(x)
-                arg_image_resize = (int(''.join(num1)), int(''.join(num2)))
+    if "-dataset" in sys.argv:
+        index:int = sys.argv.index("-dataset")
+        arg_path_cityscape_dataset = str(sys.argv[index+1])
+    
+    if "-model" in sys.argv:
+        index:int = sys.argv.index("-model")
+        arg_path_pretrained_model = str(sys.argv[index+1])
+            
+    if "-hidden_layer" in sys.argv:
+        index:int = sys.argv.index("-hidden_layer")
+        arg_hidden_layer_size = int(sys.argv[index+1])
+    
+    if "-image_resize" in sys.argv:
+        index:int = sys.argv.index("-image_resize")
+        resize_dim:list = sys.argv[index+1].split(',')
+        arg_image_resize = tuple(int(value) for value in resize_dim)
 
-            case "-loss_function":
-                arg_loss_function = sys.argv[i+1].lower()
-            case "-optimizer":
-                arg_optimizer = sys.argv[i+1].lower()
-            case "-learning_rate":
-                arg_learning_rate = float(sys.argv[i+1])
-            case "-epochs":
-                arg_epochs = int(sys.argv[i+1])
-            case "-batch_size":
-                arg_batch_size = str(sys.argv[i+1])
-            case "-model_save_folder":
-                arg_model_saved_folder = str(sys.argv[i+1])
+    if "-loss_function" in sys.argv:
+        index:int = sys.argv.index("-loss_function")
+        arg_loss_function = sys.argv[index+1].lower()
+    
+    if "-optimizer" in sys.argv:
+        index:int = sys.argv.index("-optimizer")
+        arg_optimizer = sys.argv[index+1].lower()
+    
+    if "-learning_rate" in sys.argv:
+        index:int = sys.argv.index("-learning_rate")
+        arg_learning_rate = float(sys.argv[index+1])
 
-    # resize images
-    dim = arg_image_resize
+    if "-epochs" in sys.argv:
+        index:int = sys.argv.index("-epochs")
+        arg_epochs = int(sys.argv[index+1])
 
-    # data augmentation
-    image_transforms = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize(dim, interpolation=transforms.InterpolationMode.NEAREST),
-        transforms.ToTensor()])
+    if "-batch_size" in sys.argv:
+        index:int = sys.argv.index("-batch_size")
+        arg_batch_size = str(sys.argv[index+1])
 
-    mask_transforms = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.Resize(dim, interpolation=transforms.InterpolationMode.NEAREST)])
+    if "-model_save_folder" in sys.argv:
+        index:int = sys.argv.index("-model_save_folder")
+        arg_model_saved_folder = str(sys.argv[index+1])
 
-    # define dataset
-    train_set = CitySegmentation(
-        image_root=arg_path_cityscape_dataset,
-        dataset="train",
-        image_transforms=image_transforms,
-        mask_transforms=mask_transforms,
-        dimensions=dim)
+    if "-labels" in sys.argv:
+        index:int = sys.argv.index("-labels")
+        while index + 1 < len(sys.argv):
+            arg_labels.append(sys.argv[index + 1])
+            index += 1 
 
-    valid_set = CitySegmentation(
-        image_root=arg_path_cityscape_dataset,
-        dataset="val",
-        image_transforms=image_transforms,
-        mask_transforms=mask_transforms,
-        dimensions=dim)
-
-    # load data loader object from dataset
-    if arg_batch_size == "auto":
-        pass
-        # to-do: calulate maximum batch-size based on gpu memory avaliable
-    else:
-        batch_size = int(arg_batch_size)
-    train_dataloader = DataLoader(train_set, batch_size=batch_size, num_workers=4, shuffle=True)
-    valid_dataloader = DataLoader(valid_set, batch_size=batch_size, num_workers=4, shuffle=True)
-
-    # device selection
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    # random seed generator
-    seed = 10
-
-    # training hyperparameters
-    learning_rate = arg_learning_rate
-    epochs = arg_epochs
-
-    # define loss function
-    if arg_loss_function == "dice":
-        loss_function = DiceLoss()
-    elif arg_loss_function == "entropy_dice":
-        loss_function = BCEDiceLoss()
-    elif arg_loss_function == "entropy":
-        loss_function = nn.CrossEntropyLoss()
-    else:
-        print("Bad input optimizer argument")
-        exit()  
-
-
-    # define model
-    n_channels = 3
-    n_classes = 7
-    hidden_size = arg_hidden_layer_size
-
-    model = UNet(hidden_size, n_channels, n_classes)
-    if (arg_path_pretrained_model != ""):
-        model.load_state_dict(torch.load(os.path.join(os.getcwd(), arg_model_saved_folder, arg_path_pretrained_model)))
-
-    # define optimizer
-    if arg_optimizer == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-    elif arg_optimizer == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    elif arg_optimizer == "adamw":
-        optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
-    else:
-        print("Bad input optimizer argument")
-        exit()    
-
-    # path to save model
-    path = arg_model_saved_folder
-
-    # training loop
-    model = train(path, model, train_dataloader, valid_dataloader, loss_function, optimizer, device, seed, epochs)
+    cityscapes_unet = Cityscapes_UNet(pretrained_model=arg_path_pretrained_model,
+                                      model_saved_folder=arg_model_saved_folder,
+                                      labels=arg_labels,
+                                      hidden_layer_size=arg_hidden_layer_size)
+    
+    unet = cityscapes_unet.train(arg_path_cityscape_dataset,
+                                arg_image_resize,
+                                arg_loss_function,
+                                arg_optimizer,
+                                arg_learning_rate,
+                                arg_epochs,
+                                arg_batch_size)
